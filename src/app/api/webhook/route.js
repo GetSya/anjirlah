@@ -109,6 +109,14 @@ export async function POST(req) {
         }
         break;
 
+        case 'igdl':
+           if (!payLoad){
+            await sendToTelegram('sendMessage', {chat_id: chatId, text: "Tunggu sebentar yah kak sedang aku proses", parse_mode: Markdown});
+           } 
+            var datanya = await fetch(`https://api.baguss.xyz/api/download/instagram?url=${encodeURIComponent(payload)}`);
+            await sendToTelegram('sendPhoto', {chat_id: chatId, photo: datanya.data[0].download, caption: "inih"})
+        break;
+
       case 'teks':
         await sendToTelegram('sendMessage', {
           chat_id: chatId,
