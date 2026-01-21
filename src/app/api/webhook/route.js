@@ -35,7 +35,7 @@ export async function POST(req) {
           reply_to_message_id: message.message_id // CONTOH REPLY PESAN
         });
         break;
-        case '/tiktok':
+        case 'tiktok':
         if (!payload) {
           await sendToTelegram('sendMessage', {
             chat_id: chatId,
