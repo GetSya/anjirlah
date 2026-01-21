@@ -39,40 +39,73 @@ export async function POST(req) {
         if (!payload) {
           await sendToTelegram('sendMessage', {
             chat_id: chatId,
-            text: "Silakan masukkan link TikTok setelah perintah. Contoh:\n`/tiktok https://vm.tiktok.com/xxxx/`",
+            text: "Silakan masukkan link TikTok. Contoh:\n`/tiktok https://vm.tiktok.com/xxxx/`",
             parse_mode: "Markdown"
           });
           break;
         }
 
-        await sendToTelegram('sendMessage', { chat_id: chatId, text: "Sabar ya, lagi diproses... ⏳" });
+        await sendToTelegram('sendMessage', { chat_id: chatId, text: "Sedang memproses konten TikTok... ⏳" });
 
         try {
           const apiRes = await fetch(`https://api.baguss.xyz/api/download/tiktok?url=${encodeURIComponent(payload)}`);
           const data = await apiRes.json();
 
-          if (data.status) {
+          if (data.status && data.result) {
             const res = data.result;
-            
-            // KIRIM VIDEO dengan caption dan TOMBOL (Button)
-            await sendToTelegram('sendVideo', {
-              chat_id: chatId,
-              video: res.video_nowm,
-              caption: res.description || "Video Berhasil Diunduh!",
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    { text: "📹 Download Video", url: res.video_nowm },
-                    { text: "🎵 Download Audio", url: res.audio_url }
+            const caption = res.description || "Berhasil diunduh!";
+
+            // CEK APAKAH INI SLIDESHOW (Ada array slides)
+            if (res.slides && res.slides.length > 0) {
+              
+              // 1. Kirim Foto sebagai Media Group (Album) - Max 10 Foto per album di Telegram
+              const mediaPhotos = res.slides.slice(0, 10).map((slide, index) => ({
+                type: 'photo',
+                media: slide.url,
+                caption: index === 0 ? caption : "" // Caption hanya muncul di foto pertama
+              }));
+
+              await sendToTelegram('sendMediaGroup', {
+                chat_id: chatId,
+                media: mediaPhotos
+              });
+
+              // 2. Kirim Pesan Tambahan dengan Tombol Musik (karena Slide punya lagu background)
+              await sendToTelegram('sendMessage', {
+                chat_id: chatId,
+                text: "✨ Konten berupa slideshow foto.\nKlik tombol di bawah untuk ambil audio atau versi video render (jika ada):",
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: "🎵 Download Audio (MP3)", url: res.audio_url },
+                      { text: "📹 Video Version", url: res.video_nowm }
+                    ]
                   ]
-                ]
-              }
-            });
+                }
+              });
+
+            } else {
+              // JIKA BUKAN SLIDESHOW (VIDEO BIASA)
+              await sendToTelegram('sendVideo', {
+                chat_id: chatId,
+                video: res.video_nowm,
+                caption: caption,
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: "📹 Download Video", url: res.video_nowm },
+                      { text: "🎵 Download Audio", url: res.audio_url }
+                    ]
+                  ]
+                }
+              });
+            }
+
           } else {
-            await sendToTelegram('sendMessage', { chat_id: chatId, text: "Maaf, link TikTok tidak valid atau error." });
+            await sendToTelegram('sendMessage', { chat_id: chatId, text: "Maaf, konten tidak ditemukan." });
           }
         } catch (error) {
-          await sendToTelegram('sendMessage', { chat_id: chatId, text: "Gagal menyambung ke server downloader." });
+          await sendToTelegram('sendMessage', { chat_id: chatId, text: "Terjadi kesalahan sistem API." });
         }
         break;
 
