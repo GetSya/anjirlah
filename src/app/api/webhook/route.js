@@ -29,12 +29,51 @@ export async function POST(req) {
     // Menggunakan SWITCH CASE untuk memproses perintah
     switch (userText) {
       case '/start':
-      case 'halo':
         await sendToTelegram('sendMessage', {
           chat_id: chatId,
           text: "Halo! Pilih salah satu menu berikut:\n1. teks\n2. dokumen\n3. gambar\n4. video\n5. audio\n6. tombol\n7. tombol_gambar",
           reply_to_message_id: message.message_id // CONTOH REPLY PESAN
         });
+        break;
+        case '/tiktok':
+        if (!payload) {
+          await sendToTelegram('sendMessage', {
+            chat_id: chatId,
+            text: "Silakan masukkan link TikTok setelah perintah. Contoh:\n`/tiktok https://vm.tiktok.com/xxxx/`",
+            parse_mode: "Markdown"
+          });
+          break;
+        }
+
+        await sendToTelegram('sendMessage', { chat_id: chatId, text: "Sabar ya, lagi diproses... ⏳" });
+
+        try {
+          const apiRes = await fetch(`https://api.baguss.xyz/api/download/tiktok?url=${encodeURIComponent(payload)}`);
+          const data = await apiRes.json();
+
+          if (data.status) {
+            const res = data.result;
+            
+            // KIRIM VIDEO dengan caption dan TOMBOL (Button)
+            await sendToTelegram('sendVideo', {
+              chat_id: chatId,
+              video: res.video_nowm,
+              caption: res.description || "Video Berhasil Diunduh!",
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: "📹 Download Video", url: res.video_nowm },
+                    { text: "🎵 Download Audio", url: res.audio_url }
+                  ]
+                ]
+              }
+            });
+          } else {
+            await sendToTelegram('sendMessage', { chat_id: chatId, text: "Maaf, link TikTok tidak valid atau error." });
+          }
+        } catch (error) {
+          await sendToTelegram('sendMessage', { chat_id: chatId, text: "Gagal menyambung ke server downloader." });
+        }
         break;
 
       case 'teks':
