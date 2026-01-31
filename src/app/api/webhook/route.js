@@ -5,8 +5,8 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TG_URL = `https://api.telegram.org/bot${TOKEN}`;
 const MASTER_ID = '6db91251-7426-491b-bc87-121556bc2f1b';
 
-/* ================= TELEGRAM SENDER ================= */
-async function sendToTelegram(method, body) {
+/* ================= TELEGRAM REQUEST ================= */
+async function tg(method, body) {
   await fetch(`${TG_URL}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -19,42 +19,120 @@ export async function POST(req) {
   try {
     const update = await req.json();
 
-    /* ========== CALLBACK QUERY ========== */
+    /* =====================================================
+       CALLBACK QUERY (BUTTON HANDLER)
+    ===================================================== */
     if (update.callback_query) {
       const cb = update.callback_query;
       const chatId = cb.message.chat.id;
+      const msgId = cb.message.message_id;
       const data = cb.data;
 
+      /* ===== AMBIL ITEM ===== */
+      const { data: master } = await supabase
+        .from('master_data')
+        .select('daftar_item')
+        .eq('id', MASTER_ID)
+        .single();
+
+      const items = master?.daftar_item || [];
+
+      /* ===== BUTTON: BELI ===== */
       if (data.startsWith('buy_')) {
         const itemId = data.replace('buy_', '');
+        const item = items.find(i => i.id === itemId);
 
-        await sendToTelegram('sendMessage', {
+        if (!item) {
+          await tg('editMessageText', {
+            chat_id: chatId,
+            message_id: msgId,
+            text: '❌ Produk tidak ditemukan.'
+          });
+          return NextResponse.json({ ok: true });
+        }
+
+        await tg('editMessageText', {
           chat_id: chatId,
+          message_id: msgId,
           text:
-`✅ *Pesanan diterima*
+`🛒 *Konfirmasi Pembelian*
 
-🆔 Item: \`${itemId}\`
+📦 *${item.nama_barang}*
+💰 Rp${item.harga_jual}
+📦 Stok: ${item.stok}
+
+Apakah kamu yakin?`,
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '✅ Ya, Beli', callback_data: `confirm_${item.id}` },
+                { text: '❌ Batal', callback_data: 'cancel' }
+              ]
+            ]
+          }
+        });
+
+        return NextResponse.json({ ok: true });
+      }
+
+      /* ===== BUTTON: KONFIRMASI ===== */
+      if (data.startsWith('confirm_')) {
+        const itemId = data.replace('confirm_', '');
+        const item = items.find(i => i.id === itemId);
+
+        if (!item || item.stok <= 0) {
+          await tg('editMessageText', {
+            chat_id: chatId,
+            message_id: msgId,
+            text: '❌ Stok habis.'
+          });
+          return NextResponse.json({ ok: true });
+        }
+
+        await tg('editMessageText', {
+          chat_id: chatId,
+          message_id: msgId,
+          text:
+`✅ *Pesanan Berhasil*
+
+📦 *${item.nama_barang}*
+🆔 \`${item.id}\`
+
 📞 Admin akan menghubungi kamu.`,
           parse_mode: 'Markdown'
         });
+
+        return NextResponse.json({ ok: true });
       }
 
-      return NextResponse.json({ ok: true });
+      /* ===== BUTTON: BATAL ===== */
+      if (data === 'cancel') {
+        await tg('editMessageText', {
+          chat_id: chatId,
+          message_id: msgId,
+          text: '❌ Pembelian dibatalkan.'
+        });
+
+        return NextResponse.json({ ok: true });
+      }
     }
 
-    /* ========== MESSAGE ========== */
+    /* =====================================================
+       MESSAGE HANDLER (COMMAND)
+    ===================================================== */
     const message = update.message;
     if (!message?.text) {
       return NextResponse.json({ ok: true });
     }
 
     const chatId = message.chat.id;
-    const text = message.text.trim();
+    const text = message.text.trim().toLowerCase();
     const args = text.split(' ');
-    const command = args[0].toLowerCase();
+    const command = args[0];
     const payload = args.slice(1).join(' ');
 
-    /* ========== AMBIL DAFTAR ITEM ========== */
+    /* ===== AMBIL DATA ITEM ===== */
     const { data: master, error } = await supabase
       .from('master_data')
       .select('daftar_item')
@@ -62,7 +140,7 @@ export async function POST(req) {
       .single();
 
     if (error || !master) {
-      await sendToTelegram('sendMessage', {
+      await tg('sendMessage', {
         chat_id: chatId,
         text: '❌ Data produk tidak tersedia.'
       });
@@ -71,14 +149,17 @@ export async function POST(req) {
 
     const items = master.daftar_item || [];
 
-    /* ========== COMMAND HANDLER ========== */
+    /* =====================================================
+       COMMAND SWITCH
+    ===================================================== */
     switch (command) {
 
       case '/start':
-        await sendToTelegram('sendMessage', {
+      case '/market':
+        await tg('sendMessage', {
           chat_id: chatId,
           text:
-`👋 *Selamat datang di Marketplace Digital*
+`👋 *Marketplace Digital*
 
 Perintah:
 • produk → lihat produk
@@ -87,21 +168,9 @@ Perintah:
         });
         break;
 
-      case '/market':
-        await sendToTelegram('sendMessage', {
-          chat_id: chatId,
-          text:
-`🛒 *Marketplace Menu*
-
-• produk
-• detail <id>`,
-          parse_mode: 'Markdown'
-        });
-        break;
-
       case 'produk': {
         if (!items.length) {
-          await sendToTelegram('sendMessage', {
+          await tg('sendMessage', {
             chat_id: chatId,
             text: '❌ Produk kosong.'
           });
@@ -115,9 +184,14 @@ Perintah:
 📦 Stok: ${i.stok}
 `).join('\n');
 
-        await sendToTelegram('sendMessage', {
+        await tg('sendMessage', {
           chat_id: chatId,
-          text: `📦 *Daftar Produk*\n\n${list}\nGunakan:\ndetail <id>`,
+          text:
+`📦 *Daftar Produk*
+
+${list}
+Gunakan:
+detail <id>`,
           parse_mode: 'Markdown'
         });
         break;
@@ -125,7 +199,7 @@ Perintah:
 
       case 'detail': {
         if (!payload) {
-          await sendToTelegram('sendMessage', {
+          await tg('sendMessage', {
             chat_id: chatId,
             text: 'Gunakan:\ndetail <id>'
           });
@@ -135,14 +209,14 @@ Perintah:
         const item = items.find(i => i.id === payload);
 
         if (!item) {
-          await sendToTelegram('sendMessage', {
+          await tg('sendMessage', {
             chat_id: chatId,
             text: '❌ Produk tidak ditemukan.'
           });
           break;
         }
 
-        await sendToTelegram('sendMessage', {
+        await tg('sendMessage', {
           chat_id: chatId,
           text:
 `📦 *${item.nama_barang}*
@@ -164,7 +238,7 @@ Perintah:
       }
 
       default:
-        await sendToTelegram('sendMessage', {
+        await tg('sendMessage', {
           chat_id: chatId,
           text: '❓ Perintah tidak dikenali\nKetik /market'
         });
