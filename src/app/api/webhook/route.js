@@ -20,6 +20,9 @@ export async function POST(req) {
   try {
     const update = await req.json();
     const message = update.message;
+    const args = message.text.split(' ');
+    const command = args[0].toLowerCase();
+    const payload = args.slice(1).join(' ');
 
     if (!message || !message.text) return NextResponse.json({ ok: true });
 
@@ -27,7 +30,7 @@ export async function POST(req) {
     const userText = message.text.toLowerCase();
 
     // Menggunakan SWITCH CASE untuk memproses perintah
-    switch (userText) {
+    switch (command) {
       case '/start':
         await sendToTelegram('sendMessage', {
           chat_id: chatId,
@@ -35,6 +38,80 @@ export async function POST(req) {
           reply_to_message_id: message.message_id // CONTOH REPLY PESAN
         });
         break;
+        case 'igdl':
+  if (!payload) {
+    await sendToTelegram('sendMessage', {
+      chat_id: chatId,
+      text: "📸 *Instagram Downloader*\n\nGunakan format:\n`igdl https://www.instagram.com/p/xxxxx/`",
+      parse_mode: "Markdown"
+    });
+    break;
+  }
+
+  await sendToTelegram('sendMessage', {
+    chat_id: chatId,
+    text: "⏳ Sedang mengambil media Instagram..."
+  });
+
+  try {
+    const apiRes = await fetch(
+      `https://api.baguss.xyz/api/download/instagram?url=${encodeURIComponent(payload)}`
+    );
+    const data = await apiRes.json();
+
+    if (!data.status || !data.result || !data.result.url) {
+      await sendToTelegram('sendMessage', {
+        chat_id: chatId,
+        text: "❌ Media tidak ditemukan atau private."
+      });
+      break;
+    }
+
+    const urls = data.result.url;
+    const meta = data.result.metadata || {};
+    const caption = meta.caption
+      ? `@${meta.username}\n\n${meta.caption}`
+      : `@${meta.username || "instagram"}`;
+
+    // 🔹 JIKA MEDIA LEBIH DARI 1 (CAROUSEL)
+    if (urls.length > 1) {
+      const mediaGroup = urls.slice(0, 10).map((url, i) => ({
+        type: meta.isVideo ? 'video' : 'photo',
+        media: url,
+        caption: i === 0 ? caption : ""
+      }));
+
+      await sendToTelegram('sendMediaGroup', {
+        chat_id: chatId,
+        media: mediaGroup
+      });
+
+    } else {
+      // 🔹 SINGLE FOTO / VIDEO
+      if (meta.isVideo) {
+        await sendToTelegram('sendVideo', {
+          chat_id: chatId,
+          video: urls[0],
+          caption
+        });
+      } else {
+        await sendToTelegram('sendPhoto', {
+          chat_id: chatId,
+          photo: urls[0],
+          caption
+        });
+      }
+    }
+
+  } catch (err) {
+    console.error(err);
+    await sendToTelegram('sendMessage', {
+      chat_id: chatId,
+      text: "⚠️ Terjadi kesalahan saat mengambil data Instagram."
+    });
+  }
+  break;
+
         case 'tiktok':
         if (!payload) {
           await sendToTelegram('sendMessage', {
