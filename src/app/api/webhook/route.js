@@ -27,7 +27,6 @@ export async function POST(req) {
     if (!message || !message.text) return NextResponse.json({ ok: true });
 
     const chatId = message.chat.id;
-    const userText = message.text.toLowerCase();
 
     // Menggunakan SWITCH CASE untuk memproses perintah
     switch (command) {
@@ -263,7 +262,7 @@ export async function POST(req) {
       default:
         await sendToTelegram('sendMessage', {
           chat_id: chatId,
-          text: `Perintah "${userText}" tidak dikenali. Ketik "halo" untuk menu.`
+          text: `Perintah "${command}" tidak dikenali. Ketik "halo" untuk menu.`
         });
     }
 
