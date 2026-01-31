@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '../../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TG_URL = `https://api.telegram.org/bot${TOKEN}`;
