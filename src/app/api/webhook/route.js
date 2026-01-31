@@ -4,7 +4,7 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const URL = `https://api.telegram.org/bot${TOKEN}`;
 
 // ===============================
-// Helper kirim ke Telegram
+// Helper Telegram API
 // ===============================
 async function sendToTelegram(method, body) {
   try {
@@ -19,23 +19,37 @@ async function sendToTelegram(method, body) {
 }
 
 // ===============================
-// Webhook handler
+// Webhook Handler
 // ===============================
 export async function POST(req) {
   try {
     const update = await req.json();
     const message = update.message;
 
-    // Abaikan update selain text message
+    // Abaikan selain pesan teks
     if (!message || !message.text) {
       return NextResponse.json({ ok: true });
     }
 
-    // Parsing command
-    const args = message.text.trim().split(/\s+/);
-    const command = args[0].replace('/', '').toLowerCase();
-    const payload = args.slice(1).join(' ');
+    const text = message.text.trim();
     const chatId = message.chat.id;
+
+    // Parsing command
+    const args = text.split(/\s+/);
+    let command = args[0].replace('/', '').toLowerCase();
+    let payload = args.slice(1).join(' ');
+
+    // ===============================
+    // AUTO DETECT INSTAGRAM LINK
+    // ===============================
+    const isInstagramUrl =
+      text.includes('instagram.com') ||
+      text.includes('instagr.am');
+
+    if (isInstagramUrl && !payload) {
+      command = 'igdl';
+      payload = text;
+    }
 
     // ===============================
     // SWITCH COMMAND
@@ -50,16 +64,12 @@ export async function POST(req) {
           chat_id: chatId,
           text:
 `Halo 👋
-Pilih menu:
-- igdl <url>
-- tiktok <url>
-- teks
-- dokumen
-- gambar
-- video
-- audio
-- tombol
-- tombol_gambar`
+
+Perintah tersedia:
+- igdl <link Instagram>
+- tiktok <link TikTok>
+
+Kamu juga bisa langsung kirim link Instagram tanpa command.`
         });
         break;
 
@@ -74,7 +84,9 @@ Pilih menu:
 `📸 *Instagram Downloader*
 
 Gunakan:
-\`igdl https://www.instagram.com/p/xxxxx/\``,
+\`igdl https://www.instagram.com/p/xxxxx/\`
+
+Atau langsung kirim link Instagram.`,
             parse_mode: 'Markdown'
           });
           break;
@@ -105,7 +117,7 @@ Gunakan:
             ? `@${meta.username}\n\n${meta.caption}`
             : `@${meta.username || 'instagram'}`;
 
-          // Carousel / banyak media
+          // Banyak media (carousel)
           if (urls.length > 1) {
             const mediaGroup = urls.slice(0, 10).map((u, i) => ({
               type: meta.isVideo ? 'video' : 'photo',
@@ -133,6 +145,7 @@ Gunakan:
               });
             }
           }
+
         } catch (err) {
           console.error(err);
           await sendToTelegram('sendMessage', {
@@ -153,7 +166,7 @@ Gunakan:
 `🎵 *TikTok Downloader*
 
 Gunakan:
-\`tiktok https://vm.tiktok.com/xxxx/\``,
+\`tiktok https://vm.tiktok.com/xxxxx/\``,
             parse_mode: 'Markdown'
           });
           break;
@@ -181,7 +194,6 @@ Gunakan:
           const res = data.result;
           const caption = res.description || 'Berhasil diunduh';
 
-          // Slideshow
           if (res.slides && res.slides.length > 0) {
             const mediaPhotos = res.slides.slice(0, 10).map((s, i) => ({
               type: 'photo',
@@ -196,7 +208,7 @@ Gunakan:
 
             await sendToTelegram('sendMessage', {
               chat_id: chatId,
-              text: '🎶 Ambil audio atau versi video:',
+              text: '🎶 Pilih versi:',
               reply_markup: {
                 inline_keyboard: [[
                   { text: '🎵 Audio', url: res.audio_url },
@@ -226,80 +238,12 @@ Gunakan:
         break;
 
       // ===============================
-      // DEMO COMMAND
-      // ===============================
-      case 'teks':
-        await sendToTelegram('sendMessage', {
-          chat_id: chatId,
-          text: 'Ini balasan teks.'
-        });
-        break;
-
-      case 'dokumen':
-        await sendToTelegram('sendDocument', {
-          chat_id: chatId,
-          document: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-          caption: 'Contoh dokumen'
-        });
-        break;
-
-      case 'gambar':
-        await sendToTelegram('sendPhoto', {
-          chat_id: chatId,
-          photo: 'https://picsum.photos/400/300',
-          caption: 'Contoh gambar'
-        });
-        break;
-
-      case 'video':
-        await sendToTelegram('sendVideo', {
-          chat_id: chatId,
-          video: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-          caption: 'Contoh video'
-        });
-        break;
-
-      case 'audio':
-        await sendToTelegram('sendAudio', {
-          chat_id: chatId,
-          audio: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-          caption: 'Contoh audio'
-        });
-        break;
-
-      case 'tombol':
-        await sendToTelegram('sendMessage', {
-          chat_id: chatId,
-          text: 'Pilih tombol:',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Google', url: 'https://google.com' }],
-              [{ text: 'Admin', callback_data: 'admin' }]
-            ]
-          }
-        });
-        break;
-
-      case 'tombol_gambar':
-        await sendToTelegram('sendPhoto', {
-          chat_id: chatId,
-          photo: 'https://picsum.photos/400/400',
-          caption: 'Gambar + tombol',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: 'Download', url: 'https://picsum.photos' }]
-            ]
-          }
-        });
-        break;
-
-      // ===============================
       // DEFAULT
       // ===============================
       default:
         await sendToTelegram('sendMessage', {
           chat_id: chatId,
-          text: `Perintah "${command}" tidak dikenali.`
+          text: `Perintah tidak dikenali.\nKirim /start untuk bantuan.`
         });
     }
 
