@@ -21,6 +21,22 @@ async function sendToTelegram(method, body) {
 // ===============================
 // Webhook Handler
 // ===============================
+function cleanInstagramUrl(url) {
+  try {
+    const u = new URL(url);
+    const paths = u.pathname.split('/').filter(Boolean);
+
+    // Ambil hanya sampai p / reel / tv
+    if (['p', 'reel', 'tv'].includes(paths[0])) {
+      return `${u.origin}/${paths[0]}/${paths[1]}/`;
+    }
+
+    return url;
+  } catch {
+    return url;
+  }
+}
+
 export async function POST(req) {
   try {
     const update = await req.json();
@@ -99,7 +115,7 @@ Atau langsung kirim link Instagram.`,
 
         try {
           const apiRes = await fetch(
-            `https://api.baguss.xyz/api/download/instagram?url=${encodeURIComponent(payload)}`
+            `https://api-faa.my.id/faa/igdl?url=${encodeURIComponent(payload)}`
           );
           const data = await apiRes.json();
 
